@@ -33,6 +33,84 @@ namespace MongoDBConsoleApp
 
             UpdateProductPrice(db);
 
+            var aggProducts =
+                db.GetCollection<Product>("Products")
+                .Aggregate()
+                .Group(
+                    new BsonDocument
+                    {
+                        { "_id", "$prod_id" },
+                        { "average", new BsonDocument( "$avg", "$price" ) }
+                    }
+                )
+                .Sort(new BsonDocument { { "_id", 1 } })
+                .ToList();
+
+            int totalCount = 0;
+            int correctCount = 0;
+            foreach (var product in aggProducts)
+            {
+                double totalPrice = 0D;
+                //StringBuilder stringBuilder = new StringBuilder();
+
+                var filter = Builders<Product>.Filter.Eq("prod_id", product[0]);
+                var products =
+                    db.GetCollection<Product>("Products")
+                    .Find(filter)
+                    .Sort(new BsonDocument { { "entryDateTime", 1 } })
+                    .ToList();
+
+                foreach (var prod in products)
+                {
+                    //stringBuilder.AppendLine(
+                    //    string.Format(
+                    //        "Price: {0:0.00}\tDate: {1:O}",
+                    //        prod.price,
+                    //        prod.entryDateTime
+                    //    )
+                    //);
+
+                    totalPrice += prod.price;
+                }
+
+                double expected = Math.Round(Convert.ToDouble(product["average"]), 2);
+                double actual = Math.Round(totalPrice / Convert.ToDouble(products.Count), 2);
+                bool areEqual = expected == actual;
+
+                Console.WriteLine(
+                    string.Format(
+                        "prod_id: {0}",
+                        product[0]
+                    )
+                );
+
+                ++totalCount;
+
+                if (areEqual)
+                {
+                    ++correctCount;
+                }
+                else
+                {
+                    Console.WriteLine(
+                        string.Format(
+                            "Average Price\r\n\tExpected: {1:0.00}\r\n\tActual: {2:0.00}",
+                            product[0],
+                            expected,
+                            actual
+                        )
+                    );
+                }
+            }
+
+            Console.WriteLine(
+                string.Format(
+                    "Total: {0}, Correct: {1}",
+                    totalCount,
+                    correctCount
+                )
+            );
+
             Console.WriteLine("Press any key to exit...");
             Console.ReadKey();
         }
